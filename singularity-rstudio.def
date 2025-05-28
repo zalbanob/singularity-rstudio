@@ -1,0 +1,69 @@
+BootStrap: localimage
+From: singularity-r.sif
+
+%labels
+  Maintainer Ziyad AlBanoby <ziyad.albanoby@bsc.es>
+  RStudio_Version 2025.05.0-496
+
+%help
+  This container will run RStudio Server.
+
+%apprun rserver
+  exec rserver "${@}"
+
+%runscript
+  exec rserver "${@}"
+
+%environment
+  export PATH=/usr/lib/rstudio-server/bin:${PATH}
+
+%setup
+  install -Dv \
+    rstudio_auth.sh \
+    ${SINGULARITY_ROOTFS}/usr/lib/rstudio-server/bin/rstudio_auth
+  install -Dv \
+    ldap_auth.py \
+    ${SINGULARITY_ROOTFS}/usr/lib/rstudio-server/bin/ldap_auth
+
+%post
+  set -eux
+  export DEBIAN_FRONTEND=noninteractive
+
+  # Software version
+  export RSTUDIO_VERSION=2025.05.0-496
+
+  # --------------------------------------------------------------------------------
+  # 1. Install build‐time tools + ensure libssl1.1 is available
+  # --------------------------------------------------------------------------------
+  apt-get update
+  apt-get install -y --no-install-recommends \
+    ca-certificates \
+    wget \
+    gdebi-core 
+  
+  wget -O /tmp/libssl1.1.deb \
+    "http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2_amd64.deb"
+  dpkg -i /tmp/libssl1.1.deb || apt-get -f install -y
+  rm -f /tmp/libssl1.1.deb
+
+  # --------------------------------------------------------------------------------
+  # 2. Download and install RStudio Server
+  # --------------------------------------------------------------------------------
+  wget --no-verbose \
+       -O /tmp/rstudio-server.deb \
+       "https://download2.rstudio.org/server/focal/amd64/rstudio-server-${RSTUDIO_VERSION}-amd64.deb"
+  gdebi -n /tmp/rstudio-server.deb
+  rm -f /tmp/rstudio-server.deb
+
+  # --------------------------------------------------------------------------------
+  # 3. Add support for LDAP authentication (if needed)
+  # --------------------------------------------------------------------------------
+  wget --no-verbose -O /tmp/get-pip.py "https://bootstrap.pypa.io/get-pip.py"
+  python3 /tmp/get-pip.py
+  rm -f /tmp/get-pip.py
+  pip3 install --no-cache-dir ldap3
+
+  # --------------------------------------------------------------------------------
+  # 4. Cleanup
+  # --------------------------------------------------------------------------------
+  rm -rf /var/lib/apt/lists/*
